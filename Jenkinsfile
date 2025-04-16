@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         DOCKERHUB_CREDENTIALS = credentials('dockerhub')
-        DOCKER_IMAGE_NAME = "spring-petclinic"
+        DOCKER_IMAGE_NAME = "Devops"
     }
 
     stages {
