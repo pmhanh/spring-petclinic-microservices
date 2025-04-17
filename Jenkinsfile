@@ -2,43 +2,88 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub')
-        DOCKER_IMAGE_NAME = "Devops"
+        MOD_FILES = ''
     }
 
     stages {
-        stage('Checkout Code') {
-            steps {
-                git branch: "${BRANCH_NAME}", url: 'https://github.com/spring-petclinic/spring-petclinic-microservices.git'
-            }
-        }
-
-        stage('Build Docker Image') {
+        stage('Detect Changes') {
             steps {
                 script {
-                    def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-                    docker.build("${DOCKER_IMAGE_NAME}:${commitId}")
+                    def services = [] // Danh sách service thay đổi
+                    MOD_FILES = sh(script: 'git diff --name-only HEAD~1', returnStdout: true).trim()
+                    echo "🔍 Modified files: ${MOD_FILES}"
+
+                    MOD_FILES.split("\n").each { file ->
+                        if (file.startsWith("spring-petclinic-") && file.split("/").size() > 1) {
+                            def svc = file.split("/")[0]
+                            if (!services.contains(svc)) {
+                                services << svc
+                            }
+                        }
+                    }
+
+                    if (services.isEmpty()) {
+                        echo "✅ No changes detected, skipping."
+                        currentBuild.result = 'SUCCESS'
+                        return
+                    }
+
+                    echo "⚙️ Affected services: ${services}"
+                    env.SERVICES = services.join(',') // Lưu danh sách service thay đổi
                 }
             }
         }
 
-        stage('Push Docker Image to DockerHub') {
+        stage('Test & Coverage') {
+            when {
+                expression { return env.SERVICES != null && env.SERVICES != "" }
+            }
             steps {
                 script {
-                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
-                        def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-                        docker.image("${DOCKER_IMAGE_NAME}:${commitId}").push()
+                    def services = env.SERVICES.split(',')
+                    services.each { svc ->
+                        echo "🧪 Testing: ${svc}"
+                        dir(svc) {
+                            sh '../mvnw clean test'
+                            sh '../mvnw jacoco:report'
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                    script {
+                        def services = env.SERVICES.split(',')
+                        services.each { svc ->
+                            echo "📊 Generating JaCoCo for: ${svc}"
+                            jacoco(
+                                execPattern: "${svc}/target/jacoco.exec",
+                                classPattern: "${svc}/target/classes",
+                                sourcePattern: "${svc}/src/main/java",
+                                exclusionPattern: "${svc}/src/test/**",
+                                minimumLineCoverage: '70',
+                                changeBuildStatus: true
+                            )
+                        }
                     }
                 }
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Build') {
+            when {
+                expression { return env.SERVICES != null && env.SERVICES != "" }
+            }
             steps {
                 script {
-                    sh """
-                    kubectl set image deployment/${SERVICE_NAME} ${SERVICE_NAME}=docker.io/<your-dockerhub-username>/${DOCKER_IMAGE_NAME}:${commitId} --kubeconfig /path/to/kubeconfig
-                    """
+                    def services = env.SERVICES.split(',')
+                    services.each { svc ->
+                        echo "🔨 Building: ${svc}"
+                        dir(svc) {
+                            sh '../mvnw clean package -DskipTests'
+                        }
+                    }
                 }
             }
         }
@@ -46,10 +91,47 @@ pipeline {
 
     post {
         success {
-            echo 'Pipeline completed successfully!'
+            script {
+                def commitId = env.GIT_COMMIT
+                echo "✅ Sending 'success' to GitHub: ${commitId}"
+                def response = httpRequest(
+                    url: "https://api.github.com/repos/pmhanh/spring-petclinic-microservices/statuses/${commitId}",
+                    httpMode: 'POST',
+                    contentType: 'APPLICATION_JSON',
+                    requestBody: """{
+                        \"state\": \"success\",
+                        \"description\": \"Build passed\",
+                        \"context\": \"ci/jenkins-pipeline\",
+                        \"target_url\": \"${env.BUILD_URL}\"
+                    }""",
+                    authentication: 'github-token'
+                )
+                echo "📡 GitHub Response: ${response.status}"
+            }
         }
+
         failure {
-            echo 'Pipeline failed!'
+            script {
+                def commitId = env.GIT_COMMIT
+                echo "❌ Sending 'failure' to GitHub: ${commitId}"
+                def response = httpRequest(
+                    url: "https://api.github.com/repos/pmhanh/spring-petclinic-microservices/statuses/${commitId}",
+                    httpMode: 'POST',
+                    contentType: 'APPLICATION_JSON',
+                    requestBody: """{
+                        \"state\": \"failure\",
+                        \"description\": \"Build failed\",
+                        \"context\": \"ci/jenkins-pipeline\",
+                        \"target_url\": \"${env.BUILD_URL}\"
+                    }""",
+                    authentication: 'github-token'
+                )
+                echo "📡 GitHub Response: ${response.status}"
+            }
+        }
+
+        always {
+            echo "🔚 Pipeline execution complete."
         }
     }
 }
