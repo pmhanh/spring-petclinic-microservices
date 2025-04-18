@@ -1,5 +1,5 @@
 adminServer:
-  repository: phucvu0210/spring-petclinic-admin-server
+  repository: pmhanh/spring-petclinic-admin-server
   tag: latest
   port: 9090
   nodePort: 30090
@@ -9,22 +9,22 @@ tracingServer:
   port: 9411
   nodePort: 30100
 apiGateway:
-  repository: phucvu0210/spring-petclinic-api-gateway
+  repository: pmhanh/spring-petclinic-api-gateway
   tag: latest
   port: 8080
   nodePort: 30080
 configServer:
-  repository: phucvu0210/spring-petclinic-config-server
+  repository: pmhanh/spring-petclinic-config-server
   tag: latest
   port: 8888
   nodePort: 30120
 customersService:
-  repository: phucvu0210/spring-petclinic-customers-service
+  repository: pmhanh/spring-petclinic-customers-service
   tag: latest
   port: 8081
   nodePort: 30130
 discoveryServer:
-  repository: phucvu0210/spring-petclinic-discovery-server
+  repository: pmhanh/spring-petclinic-discovery-server
   tag: latest
   port: 8761
   nodePort: 30110
@@ -34,12 +34,12 @@ genaiService:
   port: 8084
   nodePort: 30140
 vetsService:
-  repository: phucvu0210/spring-petclinic-vets-service
+  repository: pmhanh/spring-petclinic-vets-service
   tag: latest
   port: 8083
   nodePort: 30150
 visitsService:
-  repository: phucvu0210/spring-petclinic-visits-service
+  repository: pmhanh/spring-petclinic-visits-service
   tag: latest
   port: 8082
   nodePort: 30160

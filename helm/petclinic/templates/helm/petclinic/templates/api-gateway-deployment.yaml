@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      initContainers:
+      - name: wait-for-discovery-server
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - "until nc -z discovery-server 8761; do echo 'Waiting for discovery-server...'; sleep 5; done"
+      containers:
+      - name: api-gateway
+        image: {{ .Values.apiGateway.repository }}:{{ .Values.apiGateway.tag }}
+        ports:
+        - containerPort: {{ .Values.apiGateway.port }}
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: docker
+        - name: SPRING_CLOUD_CONFIG_URI
+          value: http://config-server:8888
+        - name: SPRING_LOGGING_FILE_NAME
+          value: ""
+        - name: EUREKA_INSTANCE_PREFER_IP_ADDRESS
+          value: "true"
+        - name: EUREKA_INSTANCE_HOSTNAME
+          value: api-gateway
+        - name: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
+          value: http://discovery-server:8761/eureka/
+        - name: EUREKA_CLIENT_REGISTRY_FETCH_INTERVAL_SECONDS
+          value: "10"
+        - name: EUREKA_CLIENT_EUREKA_SERVER_CONNECT_TIMEOUT_SECONDS
+          value: "600"
+        - name: EUREKA_CLIENT_EUREKA_SERVER_READ_TIMEOUT_SECONDS
+          value: "600"
