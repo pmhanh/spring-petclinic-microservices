@@ -17,7 +17,7 @@ pipeline {
         stage('Prepare Helm Values') {
             steps {
                 script {
-                    def values = readYaml file: 'helm/values.yaml'
+                    def values = readYaml file: 'helm/petclinic/values.yaml'
                     
                     def serviceBranchMapping = [
                         'adminServer': params.'admin-server',
