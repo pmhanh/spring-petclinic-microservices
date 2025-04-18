@@ -29,7 +29,7 @@ discoveryServer:
   port: 8761
   nodePort: 30110
 genaiService:
-  repository: phucvu0210/spring-petclinic-genai-service
+  repository: pmhanh/spring-petclinic-genai-service
   tag: latest
   port: 8084
   nodePort: 30140

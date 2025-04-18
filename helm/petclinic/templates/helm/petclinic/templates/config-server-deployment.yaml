@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-server
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: config-server
+  template:
+    metadata:
+      labels:
+        app: config-server
+    spec:
+      containers:
+      - name: config-server
+        image: {{ .Values.configServer.repository }}:{{ .Values.configServer.tag }}
+        ports:
+        - containerPort: {{ .Values.configServer.port }}
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: docker
+        - name: SPRING_LOGGING_FILE_NAME
+          value: ""
+        - name: EUREKA_INSTANCE_PREFER_IP_ADDRESS
+          value: "true"
+        - name: EUREKA_INSTANCE_HOSTNAME
+          value: config-server
+        - name: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
+          value: http://discovery-server:8761/eureka/
+        - name: EUREKA_CLIENT_REGISTRY_FETCH_INTERVAL_SECONDS
+          value: "10"
+        - name: EUREKA_CLIENT_EUREKA_SERVER_CONNECT_TIMEOUT_SECONDS
+          value: "600"
+        - name: EUREKA_CLIENT_EUREKA_SERVER_READ_TIMEOUT_SECONDS
+          value: "600"
