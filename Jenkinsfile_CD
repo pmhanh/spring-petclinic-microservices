@@ -17,7 +17,7 @@ pipeline {
         stage('Prepare Helm Values') {
             steps {
                 script {
-                    def values = readYaml file: 'helm/petclinic/values.yaml'
+                    def values = readYaml file: 'helm/values.yaml'
                     
                     def serviceBranchMapping = [
                         'adminServer': params.'admin-server',
@@ -32,7 +32,7 @@ pipeline {
 
                     serviceBranchMapping.each { serviceKey, branchName ->
                         if (branchName && branchName != 'main') {
-                            def commitId = sh(script: "git ls-remote https://github.com/phucvu0210/spring-petclinic-microservices.git ${branchName} | awk '{print \$1}' | cut -c1-7", returnStdout: true).trim()
+                            def commitId = sh(script: "git ls-remote https://github.com/pmhanh/spring-petclinic-microservices.git ${branchName} | awk '{print \$1}' | cut -c1-7", returnStdout: true).trim()
                             if (!commitId) {
                                 error "Could not find commit ID for branch ${branchName} of ${serviceKey}"
                             }
