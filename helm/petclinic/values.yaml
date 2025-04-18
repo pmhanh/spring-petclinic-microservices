@@ -43,3 +43,8 @@ visitsService:
   tag: latest
   port: 8082
   nodePort: 30160
+mysql:
+  enabled: true
+  auth:
+    rootPassword: "petclinic"
+    database: "petclinic"
