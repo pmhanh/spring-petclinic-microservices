@@ -126,8 +126,13 @@ pipeline {
        }
 
 
-       always {
-           echo "Pipeline finished."
-       }
+    //    always {
+    //        echo "Pipeline finished."
+    //    }
+    always {
+        withCredentials([string(credentialsId: 'github-token1', variable: 'GITHUB_TOKEN1')]) {
+            echo "Token exists: ${GITHUB_TOKEN1 ? 'yes' : 'no'}"
+        }
+    }
    }
 }
