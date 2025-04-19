@@ -94,6 +94,18 @@ pipeline {
                 }
             }
         }
+        stage('Deploy to Dev') {
+        steps {
+            script {
+                // Đăng nhập vào ArgoCD
+                withCredentials([usernamePassword(credentialsId: 'argocd-credentials', usernameVariable: 'ARGOCD_USER', passwordVariable: 'ARGOCD_PASS')]) {
+                    sh 'argocd login localhost:8085 --username $ARGOCD_USER --password $ARGOCD_PASS --insecure'
+                }
+                // Đồng bộ ứng dụng
+                sh 'argocd app sync petclinic-dev'
+            }
+        }
+        }
         stage('Deploy to Staging') {
             when {
                 expression { env.TAG_NAME }
