@@ -85,16 +85,6 @@ pipeline {
             }
         }
         stage('Deploy to Dev') {
-            when {
-                expression { env.BRANCH_NAME == 'main' && !env.TAG_NAME }
-            }
-            steps {
-                script {
-                    sh 'argocd app sync petclinic-dev'
-                }
-            }
-        }
-        stage('Deploy to Dev') {
         steps {
             script {
                 // Đăng nhập vào ArgoCD
