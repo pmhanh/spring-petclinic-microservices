@@ -1,50 +1,57 @@
+# Release tag (will be overridden by Jenkins pipeline for staging)
+releaseTag: latest
+
+# Service configurations
 adminServer:
   repository: pmhanh/spring-petclinic-admin-server
   tag: latest
   port: 9090
   nodePort: 30090
+
 tracingServer:
   repository: openzipkin/zipkin
   tag: latest
   port: 9411
   nodePort: 30100
+
 apiGateway:
   repository: pmhanh/spring-petclinic-api-gateway
   tag: latest
   port: 8080
   nodePort: 30080
+
 configServer:
   repository: pmhanh/spring-petclinic-config-server
   tag: latest
   port: 8888
   nodePort: 30120
+
 customersService:
   repository: pmhanh/spring-petclinic-customers-service
   tag: latest
   port: 8081
   nodePort: 30130
+
 discoveryServer:
   repository: pmhanh/spring-petclinic-discovery-server
   tag: latest
   port: 8761
   nodePort: 30110
+
 genaiService:
   repository: pmhanh/spring-petclinic-genai-service
   tag: latest
   port: 8084
   nodePort: 30140
+
 vetsService:
   repository: pmhanh/spring-petclinic-vets-service
   tag: latest
   port: 8083
   nodePort: 30150
+
 visitsService:
   repository: pmhanh/spring-petclinic-visits-service
   tag: latest
   port: 8082
   nodePort: 30160
-# mysql:
-#   enabled: true
-#   auth:
-#     rootPassword: "petclinic"
-#     database: "petclinic"
