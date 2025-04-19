@@ -14,7 +14,7 @@ pipeline {
                     env.TAG_NAME = gitTag
                     echo "Checking out branch: ${branchToCheckout}, Tag: ${gitTag}"
                 }
-            }
+            } // tessttttttttttttttttttttttttttttttttttttttttttttttttttt
         }
         stage('Build JAR') {
             steps {
