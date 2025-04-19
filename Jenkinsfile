@@ -1,7 +1,7 @@
 pipeline {
     agent any
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub')
     }
     stages {
         stage('Checkout Code') {
@@ -11,7 +11,7 @@ pipeline {
                     def gitTag = sh(script: 'git describe --tags --exact-match 2>/dev/null || true', returnStdout: true).trim()
                     env.TAG_NAME = gitTag
                     echo "Checking out branch: ${branchToCheckout}, Tag: ${gitTag}"
-                    git branch: branchToCheckout, url: 'https://github.com/phucvu0210/spring-petclinic-microservices.git'
+                    git branch: branchToCheckout, url: 'https://github.com/pmhanh/spring-petclinic-microservices.git'
                 }
             }
         }
@@ -48,7 +48,7 @@ pipeline {
                         servicesToBuild = serviceConfigs
                     }
 
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                         sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
                         
                         for (def service in servicesToBuild) {
