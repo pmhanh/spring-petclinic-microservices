@@ -1,17 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: api-gateway
+  name: genai-service
   namespace: {{ .Release.Namespace }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: api-gateway
+      app: genai-service
   template:
     metadata:
       labels:
-        app: api-gateway
+        app: genai-service
     spec:
       initContainers:
       - name: wait-for-discovery-server
@@ -21,10 +21,10 @@ spec:
         - -c
         - "until nc -z discovery-server 8761; do echo 'Waiting for discovery-server...'; sleep 5; done"
       containers:
-      - name: api-gateway
-        image: {{ .Values.apiGateway.repository }}:{{ .Values.apiGateway.tag }}
+      - name: genai-service
+        image: {{ .Values.genaiService.repository }}:{{ .Values.genaiService.tag }}
         ports:
-        - containerPort: {{ .Values.apiGateway.port }}
+        - containerPort: {{ .Values.genaiService.port }}
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: docker
@@ -35,7 +35,7 @@ spec:
         - name: EUREKA_INSTANCE_PREFER_IP_ADDRESS
           value: "true"
         - name: EUREKA_INSTANCE_HOSTNAME
-          value: api-gateway
+          value: genai-service
         - name: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
           value: http://discovery-server:8761/eureka/
         - name: EUREKA_CLIENT_REGISTRY_FETCH_INTERVAL_SECONDS

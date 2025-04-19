@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vets-service
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: vets-service
+  ports:
+  - protocol: TCP
+    port: {{ .Values.vetsService.port }}
+    targetPort: {{ .Values.vetsService.port }}
+    nodePort: {{ .Values.vetsService.nodePort }}
+  type: NodePort
