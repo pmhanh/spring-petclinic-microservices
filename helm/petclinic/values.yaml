@@ -1,3 +1,7 @@
+# Release tag (will be overridden by Jenkins pipeline for staging)
+releaseTag: latest
+
+# Service configurations
 adminServer:
   repository: pmhanh/spring-petclinic-admin-server
   tag: latest
@@ -13,6 +17,8 @@ apiGateway:
   tag: latest
   port: 8080
   nodePort: 30080
+  pathPrefix: ""  # Empty for dev, set to /<releaseTag> for staging
+
 configServer:
   repository: pmhanh/spring-petclinic-config-server
   tag: latest

@@ -1,18 +1,17 @@
 pipeline {
     agent any
-    triggers {
-    pollSCM('')
-    }
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub')
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
     }
     stages {
         stage('Checkout Code') {
             steps {
                 script {
                     def branchToCheckout = env.BRANCH_NAME ?: 'main'
-                    echo "Checking out branch: ${branchToCheckout}"
-                    git branch: branchToCheckout, url: 'https://github.com/pmhanh/spring-petclinic-microservices.git'
+                    def gitTag = sh(script: 'git describe --tags --exact-match 2>/dev/null || true', returnStdout: true).trim()
+                    env.TAG_NAME = gitTag
+                    echo "Checking out branch: ${branchToCheckout}, Tag: ${gitTag}"
+                    git branch: branchToCheckout, url: 'https://github.com/phucvu0210/spring-petclinic-microservices.git'
                 }
             }
         }
@@ -28,6 +27,7 @@ pipeline {
             steps {
                 script {
                     def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    def imageTag = env.TAG_NAME ? env.TAG_NAME : commitId 
                     def changedFiles = sh(script: "git diff --name-only HEAD^ HEAD || true", returnStdout: true).trim().split('\n')
                     def serviceConfigs = [
                         [name: 'admin-server', dir: 'spring-petclinic-admin-server', port: 9090],
@@ -48,21 +48,21 @@ pipeline {
                         servicesToBuild = serviceConfigs
                     }
 
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                         sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
                         
                         for (def service in servicesToBuild) {
                             def serviceDir = service.dir
                             def serviceName = service.name
                             def exposedPort = service.port
-                            def imageName = "${DOCKER_USERNAME}/spring-petclinic-${serviceName}:${commitId}"
+                            def imageName = "${DOCKER_USERNAME}/spring-petclinic-${serviceName}:${imageTag}"
                             def jarFile = sh(script: "ls ${serviceDir}/target/*.jar | head -1", returnStdout: true).trim()
 
                             if (!jarFile) {
                                 error "No JAR file found for ${serviceName} in ${serviceDir}/target/"
                             }
 
-                            echo "Building Docker image for ${serviceName}..."
+                            echo "Building Docker image for ${serviceName} with tag ${imageTag}..."
                             sh """
                                 mkdir -p docker
                                 cp ${jarFile} docker/${serviceName}.jar
@@ -73,7 +73,7 @@ pipeline {
                                 cd ..
                             """
 
-                            if (env.BRANCH_NAME == 'main') {
+                            if (env.BRANCH_NAME == 'main' && !env.TAG_NAME) {
                                 sh """
                                     docker tag ${imageName} ${DOCKER_USERNAME}/spring-petclinic-${serviceName}:latest
                                     docker push ${DOCKER_USERNAME}/spring-petclinic-${serviceName}:latest
@@ -85,7 +85,6 @@ pipeline {
             }
         }
     }
-    
 //    post {
 //        success {
 //            script {
