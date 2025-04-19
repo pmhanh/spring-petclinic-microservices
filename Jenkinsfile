@@ -8,10 +8,11 @@ pipeline {
             steps {
                 script {
                     def branchToCheckout = env.BRANCH_NAME ?: 'main'
+                    git branch: branchToCheckout, url: 'https://github.com/pmhanh/spring-petclinic-microservices.git'
+                    sh 'git fetch --tags'
                     def gitTag = sh(script: 'git describe --tags --exact-match 2>/dev/null || true', returnStdout: true).trim()
                     env.TAG_NAME = gitTag
                     echo "Checking out branch: ${branchToCheckout}, Tag: ${gitTag}"
-                    git branch: branchToCheckout, url: 'https://github.com/pmhanh/spring-petclinic-microservices.git'
                 }
             }
         }
