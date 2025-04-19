@@ -1,8 +1,8 @@
 pipeline {
     agent any
-    // triggers {
-    // pollSCM('')
-    // }
+    triggers {
+    pollSCM('')
+    }
     environment {
         DOCKERHUB_CREDENTIALS = credentials('dockerhub')
     }
@@ -14,7 +14,6 @@ pipeline {
                     echo "Checking out branch: ${branchToCheckout}"
                     git branch: branchToCheckout, url: 'https://github.com/pmhanh/spring-petclinic-microservices.git'
                 }
-
             }
         }
         stage('Build JAR') {
@@ -139,11 +138,6 @@ pipeline {
 //         }
 //     }
 //    }
-// }
-
-
-
-
 post {
     success {
         script {
@@ -193,4 +187,5 @@ post {
             echo "Token exists: ${GITHUB_TOKEN ? 'yes' : 'no'}"
         }
     }
+}
 }
