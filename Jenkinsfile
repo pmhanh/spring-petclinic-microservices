@@ -14,6 +14,7 @@
 //                     echo "Checking out branch: ${branchToCheckout}"
 //                     git branch: branchToCheckout, url: 'https://github.com/pmhanh/spring-petclinic-microservices.git'
 //                 }
+
 //             }
 //         }
 //         stage('Build JAR') {
