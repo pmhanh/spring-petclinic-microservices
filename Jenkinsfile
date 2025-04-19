@@ -98,7 +98,7 @@ pipeline {
                        "context": "ci/jenkins-pipeline",
                        "target_url": "${env.BUILD_URL}"
                    }""",
-                   authentication: 'github-token'
+                   authentication: 'github-token1'
                )
                echo "GitHub Response: ${response.status}"
            }
@@ -119,7 +119,7 @@ pipeline {
                        "context": "ci/jenkins-pipeline",
                        "target_url": "${env.BUILD_URL}"
                    }""",
-                   authentication: 'github-token'
+                   authentication: 'github-token1'
                )
                echo "GitHub Response: ${response.status}"
            }
