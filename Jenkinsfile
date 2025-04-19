@@ -48,7 +48,7 @@ pipeline {
                         echo "No services changed. Building all services as fallback."
                         servicesToBuild = serviceConfigs
                     }
-
+// TEXT
                     withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                         sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
                         
@@ -132,7 +132,7 @@ post {
     always {
         echo "Pipeline finished."
         withCredentials([string(credentialsId: 'github-token1', variable: 'GITHUB_TOKEN')]) {
-            echo "Token exists: ${GITHUB_TOKEN ? 'yes' : 'no'}"
+            echo "Token exists: ${GITHUB_TOKEN ? 'yes' : 'no'}"                         
         }
     }
 }
