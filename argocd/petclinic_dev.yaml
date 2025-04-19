@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: petclinic-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/pmhanh/spring-petclinic-microservices.git
+    targetRevision: main
+    path: helm/petclinic
+    helm:
+      parameters:
+        - name: adminServer.tag
+          value: latest
+        - name: apiGateway.tag
+          value: latest
+        - name: configServer.tag
+          value: latest
+        - name: customersService.tag
+          value: latest
+        - name: discoveryServer.tag
+          value: latest
+        - name: genaiService.tag
+          value: latest
+        - name: vetsService.tag
+          value: latest
+        - name: visitsService.tag
+          value: latest
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

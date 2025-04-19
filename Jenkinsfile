@@ -14,7 +14,7 @@ pipeline {
                     env.TAG_NAME = gitTag
                     echo "Checking out branch: ${branchToCheckout}, Tag: ${gitTag}"
                 }
-            } // tesstttttttttttttttttttttttttttttttt
+            }
         }
         stage('Build JAR') {
             steps {
@@ -48,7 +48,7 @@ pipeline {
                         echo "No services changed. Building all services as fallback."
                         servicesToBuild = serviceConfigs
                     }
-// TEXT test nnn
+
                     withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                         sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
                         
@@ -63,7 +63,6 @@ pipeline {
                                 error "No JAR file found for ${serviceName} in ${serviceDir}/target/"
                             }
 
-                            echo "Building Docker image for ${serviceName} with tag ${imageTag}..."
                             sh """
                                 mkdir -p docker
                                 cp ${jarFile} docker/${serviceName}.jar
@@ -85,55 +84,84 @@ pipeline {
                 }
             }
         }
-    }
-post {
-    success {
-        script {
-            def commitId = env.GIT_COMMIT
-            echo "Sending success status to GitHub for commit: ${commitId}"
-            withCredentials([string(credentialsId: 'github-token1', variable: 'GITHUB_TOKEN')]) {
-                def response = httpRequest(
-                    url: "https://api.github.com/repos/pmhanh/spring-petclinic-microservices/statuses/${commitId}",
-                    httpMode: 'POST',
-                    contentType: 'APPLICATION_JSON',
-                    requestBody: """{
-                        "state": "success",
-                        "description": "Build passed",
-                        "context": "ci/jenkins-pipeline",
-                        "target_url": "${env.BUILD_URL}"
-                    }""",
-                    customHeaders: [[name: 'Authorization', value: "token ${GITHUB_TOKEN}"]]
-                )
-                echo "GitHub Response: ${response.status}"
+        stage('Deploy to Dev') {
+            when {
+                expression { env.BRANCH_NAME == 'main' && !env.TAG_NAME }
+            }
+            steps {
+                script {
+                    sh 'argocd app sync petclinic-dev'
+                }
+            }
+        }
+        stage('Deploy to Staging') {
+            when {
+                expression { env.TAG_NAME }
+            }
+            steps {
+                script {
+                    def tag = env.TAG_NAME
+                    sh """
+                        argocd app set petclinic-staging \\
+                            --parameter adminServer.tag=${tag} \\
+                            --parameter apiGateway.tag=${tag} \\
+                            --parameter configServer.tag=${tag} \\
+                            --parameter customersService.tag=${tag} \\
+                            --parameter discoveryServer.tag=${tag} \\
+                            --parameter genaiService.tag=${tag} \\
+                            --parameter vetsService.tag=${tag} \\
+                            --parameter visitsService.tag=${tag}
+                        argocd app sync petclinic-staging
+                    """
+                }
             }
         }
     }
-    failure {
-        script {
-            def commitId = env.GIT_COMMIT
-            echo "Sending failure status to GitHub for commit: ${commitId}"
-            withCredentials([string(credentialsId: 'github-token1', variable: 'GITHUB_TOKEN')]) {
-                def response = httpRequest(
-                    url: "https://api.github.com/repos/pmhanh/spring-petclinic-microservices/statuses/${commitId}",
-                    httpMode: 'POST',
-                    contentType: 'APPLICATION_JSON',
-                    requestBody: """{
-                        "state": "failure",
-                        "description": "Build failed",
-                        "context": "ci/jenkins-pipeline",
-                        "target_url": "${env.BUILD_URL}"
-                    }""",
-                    customHeaders: [[name: 'Authorization', value: "token ${GITHUB_TOKEN}"]]
-                )
-                echo "GitHub Response: ${response.status}"
+    post {
+        success {
+            script {
+                def commitId = env.GIT_COMMIT
+                echo "Sending success status to GitHub for commit: ${commitId}"
+                withCredentials([string(credentialsId: 'github-token1', variable: 'GITHUB_TOKEN')]) {
+                    def response = httpRequest(
+                        url: "https://api.github.com/repos/pmhanh/spring-petclinic-microservices/statuses/${commitId}",
+                        httpMode: 'POST',
+                        contentType: 'APPLICATION_JSON',
+                        requestBody: """{
+                            "state": "success",
+                            "description": "Build passed",
+                            "context": "ci/jenkins-pipeline",
+                            "target_url": "${env.BUILD_URL}"
+                        }""",
+                        customHeaders: [[name: 'Authorization', value: "token ${GITHUB_TOKEN}"]]
+                    )
+                    echo "GitHub Response: ${response.status}"
+                }
             }
         }
-    }
-    always {
-        echo "Pipeline finished."
-        withCredentials([string(credentialsId: 'github-token1', variable: 'GITHUB_TOKEN')]) {
-            echo "Token exists: ${GITHUB_TOKEN ? 'yes' : 'no'}"                         
+        failure {
+            script {
+                def commitId = env.GIT_COMMIT
+                echo "Sending failure status to GitHub for commit: ${commitId}"
+                withCredentials([string(credentialsId: 'github-token1', variable: 'GITHUB_TOKEN')]) {
+                    def response = httpRequest(
+                        url: "https://api.github.com/repos/pmhanh/spring-petclinic-microservices/statuses/${commitId}",
+                        httpMode: 'POST',
+                        contentType: 'APPLICATION_JSON',
+                        requestBody: """{
+                            "state": "failure",
+                            "description": "Build failed",
+                            "context": "ci/jenkins-pipeline",
+                            "target_url": "${env.BUILD_URL}"
+                        }""",
+                        customHeaders: [[name: 'Authorization', value: "token ${GITHUB_TOKEN}"]]
+                    )
+                    echo "GitHub Response: ${response.status}"
+                }
+            }
+        }
+        always {
+            echo "Pipeline finished."
         }
     }
-}
 }
