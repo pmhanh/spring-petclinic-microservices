@@ -48,7 +48,7 @@ pipeline {
                         echo "No services changed. Building all services as fallback."
                         servicesToBuild = serviceConfigs
                     }
-// TEXT
+// TEXT test
                     withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                         sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
                         
