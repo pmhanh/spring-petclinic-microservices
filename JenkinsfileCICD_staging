@@ -1,0 +1,198 @@
+pipeline {
+    agent any
+    environment {
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub')
+        K8S_NAMESPACE = 'staging'
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                script {
+                    checkout scm
+                    sh 'git fetch origin main --depth=1'
+
+                    def gitTag = sh(script: 'git describe --tags --exact-match 2>/dev/null || true', returnStdout: true).trim()
+
+                    if (!gitTag) {
+                        echo "❌ No Git tag found on current commit. Stopping pipeline."
+                        env.SHOULD_RUN_PIPELINE = 'false'
+                        return
+                    }
+
+                    def tagCommit = sh(script: 'git rev-list -n 1 HEAD', returnStdout: true).trim()
+                    def mainCommit = sh(script: 'git rev-parse origin/main', returnStdout: true).trim()
+
+                    if (tagCommit != mainCommit) {
+                        echo "❌ Current tagged commit does not match HEAD of main branch. Stopping pipeline."
+                        env.SHOULD_RUN_PIPELINE = 'false'
+                        return
+                    }
+
+                    env.RELEASE_TAG = gitTag
+                    env.SHOULD_RUN_PIPELINE = 'true'
+                    echo "✅ Found release tag '${env.RELEASE_TAG}' on latest commit of main branch. Continuing pipeline..."
+                }
+            }
+        }
+
+        stage('Build JAR') {
+            when {
+                expression { return env.SHOULD_RUN_PIPELINE == 'true' }
+            }
+            steps {
+                script {
+                    if (env.SHOULD_RUN_PIPELINE != 'true') {
+                        echo "Bỏ qua stage Build JAR vì nhánh không phải main hoặc không có tag."
+                        return
+                    }
+                    sh './mvnw clean package -DskipTests'
+                }
+            }
+        }
+
+        stage('Build and Push Docker Images') {
+            when {
+                expression { return env.SHOULD_RUN_PIPELINE == 'true' }
+            }
+            steps {
+                script {
+                    if (env.SHOULD_RUN_PIPELINE != 'true') {
+                        echo "Bỏ qua stage Build and Push Docker Images vì nhánh không phải main hoặc không có tag."
+                        return
+                    }
+
+                    def imageTag = env.RELEASE_TAG
+                    def serviceConfigs = [
+                        [name: 'admin-server', dir: 'spring-petclinic-admin-server', port: 9090],
+                        [name: 'api-gateway', dir: 'spring-petclinic-api-gateway', port: 8080],
+                        [name: 'config-server', dir: 'spring-petclinic-config-server', port: 8888],
+                        [name: 'customers-service', dir: 'spring-petclinic-customers-service', port: 8081],
+                        [name: 'discovery-server', dir: 'spring-petclinic-discovery-server', port: 8761],
+                        [name: 'genai-service', dir: 'spring-petclinic-genai-service', port: 8084],
+                        [name: 'vets-service', dir: 'spring-petclinic-vets-service', port: 8083],
+                        [name: 'visits-service', dir: 'spring-petclinic-visits-service', port: 8082]
+                    ]
+
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                        sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+
+                        for (def service in serviceConfigs) {
+                            def serviceDir = service.dir
+                            def serviceName = service.name
+                            def exposedPort = service.port
+                            def imageName = "${DOCKER_USERNAME}/spring-petclinic-${serviceName}:${imageTag}"
+                            def jarFile = sh(script: "ls ${serviceDir}/target/*.jar | head -1", returnStdout: true).trim()
+
+                            if (!jarFile) {
+                                error "No JAR file found for ${serviceName} in ${serviceDir}/target/"
+                            }
+
+                            echo "Building and pushing Docker image for ${serviceName} with tag ${imageTag}..."
+                            sh """
+                                mkdir -p docker
+                                cp ${jarFile} docker/${serviceName}.jar
+                                cd docker
+                                docker build --build-arg ARTIFACT_NAME=${serviceName} --build-arg EXPOSED_PORT=${exposedPort} -t ${imageName} .
+                                docker push ${imageName}
+                                rm ${serviceName}.jar
+                                cd ..
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Update Helm Values') {
+            when {
+                expression { return env.SHOULD_RUN_PIPELINE == 'true' }
+            }
+            steps {
+                script {
+                    if (env.SHOULD_RUN_PIPELINE != 'true') {
+                        echo "Bỏ qua stage Update Helm Values vì nhánh không phải main hoặc không có tag."
+                        return
+                    }
+
+                    def values = readYaml file: 'helm/petclinic/values-staging.yaml'
+                    values.releaseTag = env.RELEASE_TAG
+
+                    def services = [
+                        'adminServer',
+                        'apiGateway',
+                        'configServer',
+                        'customersService',
+                        'discoveryServer',
+                        'genaiService',
+                        'vetsService',
+                        'visitsService'
+                    ]
+
+                    services.each { svc ->
+                        values[svc].tag = env.RELEASE_TAG
+                        echo "Updated Docker image tag for ${svc} to ${env.RELEASE_TAG}"
+                    }
+
+                    writeYaml file: 'helm/petclinic/values-staging.yaml', data: values, overwrite: true
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            when {
+                expression { return env.SHOULD_RUN_PIPELINE == 'true' }
+            }
+            steps {
+                script {
+                    if (env.SHOULD_RUN_PIPELINE != 'true') {
+                        echo "Bỏ qua stage Deploy to Kubernetes vì nhánh không phải main hoặc không có tag."
+                        return
+                    }
+
+                    sh "helm upgrade --install petclinic helm/petclinic --namespace ${K8S_NAMESPACE} --create-namespace -f helm/petclinic/values-staging.yaml"
+                }
+            }
+        }
+
+        stage('Print Access Info') {
+            when {
+                expression { return env.SHOULD_RUN_PIPELINE == 'true' }
+            }
+            steps {
+                script {
+                    if (env.SHOULD_RUN_PIPELINE != 'true') {
+                        echo "Bỏ qua stage Print Access Info vì nhánh không phải main hoặc không có tag."
+                        return
+                    }
+
+                    def nodeName = sh(script: "kubectl get nodes --no-headers | grep -v control-plane | awk '{print \$1}'", returnStdout: true).trim()
+                    def nodeIp = sh(script: "kubectl get node ${nodeName} -o jsonpath='{.status.addresses[?(@.type==\"InternalIP\")].address}'", returnStdout: true).trim()
+                    def servicePort = sh(script: "kubectl get svc api-gateway -n ${K8S_NAMESPACE} -o jsonpath='{.spec.ports[0].nodePort}'", returnStdout: true).trim()
+                    def subdomain = env.RELEASE_TAG.replace('.', '-')
+                    echo "Access the application at: http://${nodeIp}:${servicePort}"
+                    echo "Or use: http://${subdomain}.petclinic.local:${servicePort}"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Cleaning up workspace..."
+            cleanWs()
+        }
+        success {
+            script {
+                if (env.SHOULD_RUN_PIPELINE == 'false') {
+                    echo "✅ Staging pipeline skipped successfully (not main branch or no git tag)."
+                } else {
+                    echo "✅ Staging pipeline completed successfully."
+                }
+            }
+        }
+        failure {
+            echo "❌ Staging pipeline failed. Check logs."
+        }
+    }
+}

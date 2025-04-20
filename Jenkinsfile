@@ -3,33 +3,68 @@ pipeline {
     environment {
         DOCKERHUB_CREDENTIALS = credentials('dockerhub')
     }
+
     stages {
         stage('Checkout Code') {
             steps {
                 script {
-                    def branchToCheckout = env.BRANCH_NAME ?: 'main'
-                    git branch: branchToCheckout, url: 'https://github.com/pmhanh/spring-petclinic-microservices.git'
-                    sh 'git fetch --tags'
-                    def gitTag = sh(script: 'git describe --tags --exact-match 2>/dev/null || true', returnStdout: true).trim()
-                    env.TAG_NAME = gitTag
-                    echo "Checking out branch: ${branchToCheckout}, Tag: ${gitTag}"
+                    // Lấy tên nhánh từ env.BRANCH_NAME hoặc git
+                    def branchToCheckout = env.BRANCH_NAME ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+                    echo "Branch hiện tại: ${branchToCheckout}"
+
+                    // Sử dụng biến cục bộ để kiểm soát pipeline
+                    def shouldRunPipeline = true
+                    if (branchToCheckout == 'main') {
+                        echo "Đây là nhánh 'main'. Pipeline sẽ dừng lại và vẫn được đánh dấu SUCCESS."
+                        shouldRunPipeline = false
+                    }
+
+                    // Lưu giá trị vào biến môi trường để sử dụng trong các stage sau
+                    env.SHOULD_RUN_PIPELINE = shouldRunPipeline.toString()
+
+                    if (!shouldRunPipeline) {
+                        return
+                    }
+
+                    // Checkout nhánh động
+                    checkout([$class: 'GitSCM', 
+                              branches: [[name: "*/${branchToCheckout}"]], 
+                              userRemoteConfigs: [[url: 'https://github.com/pmhanh/spring-petclinic-microservices.git']]])
                 }
-            } // tesstttttttttttttttttttttttttttttttt
+            }
         }
+
         stage('Build JAR') {
+            when {
+                expression { return env.SHOULD_RUN_PIPELINE == 'true' }
+            }
             steps {
                 script {
-                    echo "Building JAR for all services..."
+                    // Kiểm tra bổ sung để đảm bảo không chạy trên nhánh main
+                    if (env.SHOULD_RUN_PIPELINE != 'true') {
+                        echo "Bỏ qua stage Build JAR vì nhánh là main."
+                        return
+                    }
                     sh './mvnw clean package -DskipTests'
                 }
             }
         }
+
         stage('Build and Push Docker Images') {
+            when {
+                expression { return env.SHOULD_RUN_PIPELINE == 'true' }
+            }
             steps {
                 script {
+                    // Kiểm tra bổ sung để đảm bảo không chạy trên nhánh main
+                    if (env.SHOULD_RUN_PIPELINE != 'true') {
+                        echo "Bỏ qua stage Build and Push Docker Images vì nhánh là main."
+                        return
+                    }
+
                     def commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-                    def imageTag = env.TAG_NAME ? env.TAG_NAME : commitId 
-                    def changedFiles = sh(script: "git diff --name-only HEAD^ HEAD || true", returnStdout: true).trim().split('\n')
+                    // Xử lý git diff an toàn
+                    def changedFiles = sh(script: 'git diff --name-only HEAD^ HEAD 2>/dev/null || git ls-files', returnStdout: true).trim().split('\n')
                     def serviceConfigs = [
                         [name: 'admin-server', dir: 'spring-petclinic-admin-server', port: 9090],
                         [name: 'api-gateway', dir: 'spring-petclinic-api-gateway', port: 8080],
@@ -47,93 +82,53 @@ pipeline {
                     if (servicesToBuild.isEmpty()) {
                         echo "No services changed. Building all services as fallback."
                         servicesToBuild = serviceConfigs
+                    } else {
+                        echo "Building services with changes: ${servicesToBuild.collect { it.name }.join(', ')}"
                     }
-// TEXT test nnn
+
                     withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                         sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
-                        
                         for (def service in servicesToBuild) {
-                            def serviceDir = service.dir
-                            def serviceName = service.name
-                            def exposedPort = service.port
-                            def imageName = "${DOCKER_USERNAME}/spring-petclinic-${serviceName}:${imageTag}"
-                            def jarFile = sh(script: "ls ${serviceDir}/target/*.jar | head -1", returnStdout: true).trim()
+                            def imageName = "${DOCKER_USERNAME}/spring-petclinic-${service.name}:${commitId}"
+                            def jarFile = sh(script: "ls ${service.dir}/target/*.jar | head -1", returnStdout: true).trim()
 
                             if (!jarFile) {
-                                error "No JAR file found for ${serviceName} in ${serviceDir}/target/"
+                                error "No JAR file found for ${service.name} in ${service.dir}/target/"
                             }
 
-                            echo "Building Docker image for ${serviceName} with tag ${imageTag}..."
+                            echo "Building and pushing Docker image for ${service.name} with tag ${commitId}..."
                             sh """
                                 mkdir -p docker
-                                cp ${jarFile} docker/${serviceName}.jar
+                                cp ${jarFile} docker/${service.name}.jar
                                 cd docker
-                                docker build --build-arg ARTIFACT_NAME=${serviceName} --build-arg EXPOSED_PORT=${exposedPort} -t ${imageName} .
+                                docker build --build-arg ARTIFACT_NAME=${service.name} --build-arg EXPOSED_PORT=${service.port} -t ${imageName} .
                                 docker push ${imageName}
-                                rm ${serviceName}.jar
+                                rm ${service.name}.jar
                                 cd ..
                             """
-
-                            if (env.BRANCH_NAME == 'main' && !env.TAG_NAME) {
-                                sh """
-                                    docker tag ${imageName} ${DOCKER_USERNAME}/spring-petclinic-${serviceName}:latest
-                                    docker push ${DOCKER_USERNAME}/spring-petclinic-${serviceName}:latest
-                                """
-                            }
                         }
                     }
                 }
             }
         }
     }
-post {
-    success {
-        script {
-            def commitId = env.GIT_COMMIT
-            echo "Sending success status to GitHub for commit: ${commitId}"
-            withCredentials([string(credentialsId: 'github-token1', variable: 'GITHUB_TOKEN')]) {
-                def response = httpRequest(
-                    url: "https://api.github.com/repos/pmhanh/spring-petclinic-microservices/statuses/${commitId}",
-                    httpMode: 'POST',
-                    contentType: 'APPLICATION_JSON',
-                    requestBody: """{
-                        "state": "success",
-                        "description": "Build passed",
-                        "context": "ci/jenkins-pipeline",
-                        "target_url": "${env.BUILD_URL}"
-                    }""",
-                    customHeaders: [[name: 'Authorization', value: "token ${GITHUB_TOKEN}"]]
-                )
-                echo "GitHub Response: ${response.status}"
+
+    post {
+        always {
+            echo "🧹 Cleaning up workspace..."
+            cleanWs()
+        }
+        success {
+            script {
+                if (env.SHOULD_RUN_PIPELINE == 'false') {
+                    echo "✅ Pipeline skipped successfully (main branch detected)."
+                } else {
+                    echo "✅ Pipeline completed successfully."
+                }
             }
         }
-    }
-    failure {
-        script {
-            def commitId = env.GIT_COMMIT
-            echo "Sending failure status to GitHub for commit: ${commitId}"
-            withCredentials([string(credentialsId: 'github-token1', variable: 'GITHUB_TOKEN')]) {
-                def response = httpRequest(
-                    url: "https://api.github.com/repos/pmhanh/spring-petclinic-microservices/statuses/${commitId}",
-                    httpMode: 'POST',
-                    contentType: 'APPLICATION_JSON',
-                    requestBody: """{
-                        "state": "failure",
-                        "description": "Build failed",
-                        "context": "ci/jenkins-pipeline",
-                        "target_url": "${env.BUILD_URL}"
-                    }""",
-                    customHeaders: [[name: 'Authorization', value: "token ${GITHUB_TOKEN}"]]
-                )
-                echo "GitHub Response: ${response.status}"
-            }
+        failure {
+            echo "❌ Pipeline failed. Check logs."
         }
     }
-    always {
-        echo "Pipeline finished."
-        withCredentials([string(credentialsId: 'github-token1', variable: 'GITHUB_TOKEN')]) {
-            echo "Token exists: ${GITHUB_TOKEN ? 'yes' : 'no'}"                         
-        }
-    }
-}
 }
